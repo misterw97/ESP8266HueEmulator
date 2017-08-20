@@ -1,12 +1,15 @@
-#include "LightService.h"
+#include "Light.h"
+#include "LightGroup.h"
+
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
-#include <TimeLib.h>
-#include <NtpClientLib.h>
+
 #include <WiFiUdp.h>
 #include "SSDP.h"
+
 #include <aJSON.h> // Replace avm/pgmspace.h with pgmspace.h there and set #define PRINT_BUFFER_LEN 4096 ################# IMPORTANT
 #include <assert.h>
+
 
 #if PRINT_BUFFER_LEN < 2048
 #  error aJson print buffer length PRINT_BUFFER_LEN must be increased to at least 4096
@@ -18,7 +21,7 @@ String ipString;
 String netmaskString;
 String gatewayString;
 // The username of the client (currently we authorize all clients simulating a pressed button on the bridge)
-String client;
+//String client;
 
 ESP8266WebServer *HTTP;
 
@@ -190,22 +193,28 @@ protected:
 
 LightServiceClass LightService;
 
-LightHandler *lightHandlers[MAX_LIGHT_HANDLERS]; // interfaces exposed to the outside world
+Light *lights_[MAX_LIGHTS] = {nullptr, };// interfaces exposed to the outside world
+LightGroup *groups_[MAX_LIGHTS] = {nullptr, };// groups of light / rooms
+LightScene *scenes_[MAX_LIGHTS] = {nullptr, };// scenes with lights configs
 
-bool LightServiceClass::setLightHandler(int index, LightHandler *handler) {
-  if (index >= currentNumLights || index < 0) return false;
-  lightHandlers[index] = handler;
-  return true;
-}
-
-bool LightServiceClass::setLightsAvailable(int lights) {
-  if (lights <= MAX_LIGHT_HANDLERS) {
-    currentNumLights = lights;
+/**
+ * Adding a light to Hue Bridge
+ * @param light to add
+ */
+bool LightServiceClass::addLight(Light *light) {
+  // Verify that there's still available place
+  if ( currentNumLights < MAX_LIGHTS ) {
+    light->id = currentNumLights;
+    lights_[currentNumLights] = light;
+    ++currentNumLights;
     return true;
   }
   return false;
 }
 
+/**
+ * @return Number of lights available throught this bridge (aka LightService)
+ */
 int LightServiceClass::getLightsAvailable() {
   return currentNumLights;
 }
@@ -219,18 +228,6 @@ String StringIPaddress(IPAddress myaddr)
     if (i < 3) LocalIP += ".";
   }
   return LocalIP;
-}
-
-LightHandler *LightServiceClass::getLightHandler(int numberOfTheLight) {
-  if (numberOfTheLight >= currentNumLights || numberOfTheLight < 0) {
-    return nullptr;
-  }
-
-  if (!lightHandlers[numberOfTheLight]) {
-    return new LightHandler();
-  }
-
-  return lightHandlers[numberOfTheLight];
 }
 
 static const char* _ssdp_response_template =
@@ -280,72 +277,6 @@ int ssdpMsgFormatCallback(SSDPClass *ssdp, char *buffer, int buff_len,
       uuid);
   }
 }
-
-class LightGroup {
-  public:
-    LightGroup(aJsonObject *root) {
-      aJsonObject* jName = aJson.getObjectItem(root, "name");
-      aJsonObject* jLights = aJson.getObjectItem(root, "lights");
-      // jName and jLights guaranteed to exist
-      name = jName->valuestring;
-      for (int i = 0; i < aJson.getArraySize(jLights); i++) {
-        aJsonObject* jLight = aJson.getArrayItem(jLights, i);
-        // lights are 1-based and map to the 0-based bitfield
-        int lightNum = atoi(jLight->valuestring);
-        if (lightNum != 0) {
-          lights |= (1 << (lightNum - 1));
-        }
-      }
-    }
-    aJsonObject *getJson() {
-      aJsonObject *object = aJson.createObject();
-      aJson.addStringToObject(object, "name", name.c_str());
-      aJsonObject *lightsArray = aJson.createArray();
-      aJson.addItemToObject(object, "lights", lightsArray);
-      for (int i = 0; i < 16; i++) {
-        if (!((1 << i) & lights)) {
-          continue;
-        }
-        // add light to list
-        String lightNum = "";
-        lightNum += (i + 1);
-        aJson.addItemToArray(lightsArray, aJson.createItem(lightNum.c_str()));
-      }
-      return object;
-    }
-    aJsonObject *getSceneJson() {
-      aJsonObject *object = aJson.createObject();
-      aJson.addStringToObject(object, "name", name.c_str());
-      aJson.addStringToObject(object, "owner", "api");
-      aJson.addStringToObject(object, "picture", "");
-      aJson.addStringToObject(object, "lastupdated", "");
-      aJson.addBooleanToObject(object, "recycle", false);
-      aJson.addBooleanToObject(object, "locked", false);
-      aJson.addNumberToObject(object, "version", 2);
-      aJsonObject *lightsArray = aJson.createArray();
-      aJson.addItemToObject(object, "lights", lightsArray);
-      for (int i = 0; i < 16; i++) {
-        if (!((1 << i) & lights)) {
-          continue;
-        }
-        // add light to list
-        String lightNum = "";
-        lightNum += (i + 1);
-        aJson.addItemToArray(lightsArray, aJson.createItem(lightNum.c_str()));
-      }
-      return object;
-    }
-    unsigned int getLightMask() {
-      return lights;
-    }
-    // only used for scenes
-    String id;
-  private:
-    String name;
-    // use unsigned int to hold members of this group. 2 bytes -> supports up to 16 lights
-    unsigned int lights = 0;
-    // no need to hold the group type, only LightGroup is supported for API 1.4
-};
 
 void on(HandlerFunction fn, const String &wcUri, HTTPMethod method, char wildcard = '*') {
   HTTP->addHandler(new WcFnRequestHandler(fn, wcUri, method, wildcard));
@@ -409,6 +340,10 @@ void addConfigJson(aJsonObject *config);
 void sendJson(aJsonObject *config);
 void sendUpdated();
 void sendError(int type, String path, String description);
+/**
+ * Configuration of the bridge
+ * GET : send configuration of the bridge
+ */
 void configFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method) {
   switch (method) {
     case HTTP_GET: {
@@ -433,28 +368,40 @@ void configFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method)
   }
 }
 
+
 void sendSuccess(String name, String value);
+/**
+ * Authentification function
+ * // TODO // API hue 
+ */
 void authFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method) {
   // On the real bridge, the link button on the bridge must have been recently pressed for the command to execute successfully.
   // We try to execute successfully regardless of a button for now.
+  // TODO
   sendSuccess("username", "api");
 }
+
 
 aJsonObject *getGroupJson();
 aJsonObject *getSceneJson();
 void addLightsJson(aJsonObject *config);
+/**
+ * Respond with complete json as in https://github.com/probonopd/ESP8266HueEmulator/wiki/Hue-API#get-all-information-about-the-bridge
+ */
 void wholeConfigFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method) {
-  // Serial.println("Respond with complete json as in https://github.com/probonopd/ESP8266HueEmulator/wiki/Hue-API#get-all-information-about-the-bridge");
   aJsonObject *root;
   root = aJson.createObject();
-  // the default group 0 is never listed
+  // List all saved groups
   aJson.addItemToObject(root, "groups", getGroupJson());
+  // List all saved scenes
   aJson.addItemToObject(root, "scenes", getSceneJson());
   aJsonObject *config;
   aJson.addItemToObject(root, "config", config = aJson.createObject());
+  // Add config
   addConfigJson(config);
   aJsonObject *lights;
   aJson.addItemToObject(root, "lights", lights = aJson.createObject());
+  // Add available lights
   addLightsJson(lights);
   aJsonObject *schedules;
   aJson.addItemToObject(root, "schedules", schedules = aJson.createObject());
@@ -467,6 +414,9 @@ void wholeConfigFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod me
 
 void sceneListingHandler();
 void sceneCreationHandler(String body);
+/**
+ * Scenes fonctions (get scenes)
+ */
 void scenesFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method) {
   switch (method) {
     case HTTP_GET:
@@ -482,13 +432,14 @@ void scenesFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method)
 }
 
 int findSceneIndex(String id);
-LightGroup *findScene(String id);
+LightScene *findScene(String id);
 bool updateSceneSlot(int slot, String id, String body);
 void sendSuccess(String text);
 void sceneCreationHandler(String sceneId);
+
 void scenesIdFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method) {
   String sceneId = handler->getWildCard(1);
-  LightGroup *scene = findScene(sceneId);
+  LightScene *scene = scenes_[atoi(sceneId)];
   switch (method) {
     case HTTP_GET:
       if (scene) {
@@ -522,7 +473,7 @@ void scenesIdLightFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod 
     case HTTP_PUT: {
       Serial.print("Body: ");
       Serial.println(HTTP->arg("plain"));
-      // XXX Do something with this information...
+      // TODO Do something with this information...
       aJsonObject* body = aJson.parse(( char*) HTTP->arg("plain").c_str());
       sendJson(generateTargetPutResponse(body, "/scenes/" + handler->getWildCard(1) + "/lightstates/" + handler->getWildCard(2) + "/"));
       aJson.deleteItem(body);
@@ -550,13 +501,12 @@ void groupsFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method)
   }
 }
 
-LightGroup *lightGroups[16] = {nullptr, };
 void groupCreationHandler(String sceneId);
 bool updateGroupSlot(int slot, String body);
 void groupsIdFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method) {
   String groupNumText = handler->getWildCard(1);
   int groupNum = atoi(groupNumText.c_str()) - 1;
-  if ((groupNum == -1 && groupNumText != "0") || groupNum >= 16 || (groupNum >= 0 && !lightGroups[groupNum])) {
+  if ((groupNum == -1 && groupNumText != "0") || groupNum >= MAX_LIGHTS || (groupNum >= 0 && !groups[groupNum])) {
     // error, invalid group number
     sendError(3, requestUri, "Invalid group number");
     return;
@@ -565,17 +515,13 @@ void groupsIdFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod metho
   switch (method) {
     case HTTP_GET:
       if (groupNum != -1) {
-        sendJson(lightGroups[groupNum]->getJson());
+        sendJson(groups[groupNum]->getJson());
       } else {
         aJsonObject *object = aJson.createObject();
         aJson.addStringToObject(object, "name", "0");
         aJsonObject *lightsArray = aJson.createArray();
         aJson.addItemToObject(object, "lights", lightsArray);
-        for (int i = 0; i < MAX_LIGHT_HANDLERS; i++) {
-          if (!lightHandlers[i]) {
-            continue;
-          }
-          // add light to list
+        for (int i = 0; i < currentNumLights; i++) {
           String lightNum = "";
           lightNum += (i + 1);
           aJson.addItemToArray(lightsArray, aJson.createItem(lightNum.c_str()));
@@ -997,7 +943,7 @@ static String format2Digits(int num) {
 
 void addConfigJson(aJsonObject *root)
 {
-  aJson.addStringToObject(root, "name", "hue emulator");
+  aJson.addStringToObject(root, "name", BRIDGE_NAME);
   aJson.addStringToObject(root, "swversion", "81012917");
   aJson.addStringToObject(root, "bridgeid", bridgeIDString.c_str());
   aJson.addBooleanToObject(root, "portalservices", false);
@@ -1008,21 +954,10 @@ void addConfigJson(aJsonObject *root)
   aJson.addStringToObject(root, "netmask", netmaskString.c_str());
   aJson.addStringToObject(root, "gateway", gatewayString.c_str());
   aJson.addStringToObject(root, "apiversion", "1.3.0");
-  if (timeStatus() == timeSet) {
-    time_t moment = now();
-    String dts = String(year(moment));
-    dts += "-";
-    dts += format2Digits(month(moment));
-    dts += "-";
-    dts += format2Digits(day(moment));
-    dts += "T";
-    dts += NTP.getTimeStr(moment);
-
-    // TODO: send this as "utc" and "localtime" as timezone corrected utc
-    aJson.addStringToObject(root, "localtime", dts.c_str());
-  }
+  // TODO: send this as "utc" and "localtime" as timezone corrected utc
+  // aJson.addStringToObject(root, "localtime", dts.c_str());
   // TODO: take this from the settings, once we have spiffs support
-  aJson.addStringToObject(root, "timezone", "Europe/London");
+  aJson.addStringToObject(root, "timezone", "Europe/Paris");
   aJsonObject *whitelist;
   aJson.addItemToObject(root, "whitelist", whitelist = aJson.createObject());
   aJsonObject *whitelistFirstEntry;
@@ -1126,10 +1061,10 @@ aJsonObject *getGroupJson() {
   // iterate over groups and serialize
   aJsonObject *root = aJson.createObject();
   for (int i = 0; i < 16; i++) {
-    if (lightGroups[i]) {
+    if (groups_[i]) {
       String sIndex = "";
       sIndex += (i + 1);
-      aJson.addItemToObject(root, sIndex.c_str(), lightGroups[i]->getJson());
+      aJson.addItemToObject(root, sIndex.c_str(), groups_[i]->getJson());
     }
   }
   return root;
