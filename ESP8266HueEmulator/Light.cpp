@@ -38,4 +38,3 @@ char* Light::getTypeModelid() {
       return "LCT001";
   }
 }
-

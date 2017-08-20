@@ -6,6 +6,8 @@
 #include <WiFiUdp.h>
 
 #include "Light.h"
+#include "LightService.h"
+
 #include "SSDP.h"
 
 #include <aJSON.h> // Replace avm/pgmspace.h with pgmspace.h there and set #define PRINT_BUFFER_LEN 4096 ################# IMPORTANT
@@ -46,12 +48,12 @@ void setup() {
     Serial.print(".");
   }
   
-  LightService.begin();
+  //LightService.begin();
   
 }
 
 void loop() {
   
-  LightService.update();
+  //LightService.update();
   
 }

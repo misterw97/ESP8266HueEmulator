@@ -1,10 +1,13 @@
-// Max number of exposed lights is directly related to aJSON PRINT_BUFFER_LEN, 14 for 4096
-#define MAX_LIGHTS 14
-#define COLOR_SATURATION 255.0f
-#define BRIDGE_NAME "Reveil"
+#include "HueLightInfo.h"
+#include "params.h"
 
-#include "LightService.h"
+/**
+ * Light is an object that should be able to handle queries containing informations about lightning
+ */
+#ifndef LIGHT
+#define LIGHT
 
+// https://developers.meethue.com/documentation/supported-lights
 enum LightType {
   EXTENDED_COLOR_LIGHT,
   DIMMABLE_LIGHT,
@@ -24,8 +27,15 @@ class Light {
     char* getName();
     HueLightInfo getInfo();
 
-    /** Do something when receiving informations for this Light */
-    virtual void handleQuery(HueLightInfo info) {}
+    /**
+    * Do something when receiving informations for this Light
+    * See HueLightInfo to know which information is available
+    * For example : you could do something as " if (info.on) led.turnOn(); else led.turnOff(); "
+    */
+    void handleQuery(HueLightInfo info) {
+      this->info = info;
+      return;
+    }
     
   private:
     char* name;
@@ -33,3 +43,5 @@ class Light {
     HueLightInfo info;
   
 };
+
+#endif
