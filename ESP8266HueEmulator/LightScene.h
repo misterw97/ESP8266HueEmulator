@@ -8,21 +8,23 @@
 #ifndef LIGHTSCENE
 #define LIGHTSCENE
 
-// TODO use polymorphisme making LightScene a child of LightGroup
+// TODO use polymorphism making LightScene a child of LightGroup
 class LightScene {
   public:
     void begin(int id);
     bool active = false;
-      
+    
     aJsonObject *getJson();
-
+    
     void setId(int id);
-    int getId();
     void addLight(Light *light);
-    void removeLights();
     void setName(char* name);
     void setOwner(const char* owner);
     
+    int getId();
+    Light* *getLights();
+    
+    void removeLights();
   private:
     int id;
     char name[40];

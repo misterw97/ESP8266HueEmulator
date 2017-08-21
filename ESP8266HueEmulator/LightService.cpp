@@ -454,9 +454,9 @@ void LightServiceClass::begin(ESP8266WebServer *svr) {
   on(scenesIdFn, "/api/*/scenes/*", HTTP_ANY);
   //on(scenesIdLightFn, "/api/*/scenes/*/lightstates/*", HTTP_ANY);
   //on(scenesIdLightFn, "/api/*/scenes/*/lights/*/state", HTTP_ANY);
-  //on(groupsFn, "/api/*/groups", HTTP_ANY);
-  //on(groupsIdFn, "/api/*/groups/*", HTTP_ANY);
-  //on(groupsIdActionFn, "/api/*/groups/*/action", HTTP_ANY);
+  on(groupsFn, "/api/*/groups", HTTP_ANY);
+  on(groupsIdFn, "/api/*/groups/*", HTTP_ANY);
+  on(groupsIdActionFn, "/api/*/groups/*/action", HTTP_ANY);
   on(lightsFn, "/api/*/lights", HTTP_ANY);
   on(unimpFn, "/api/*/lights/new", HTTP_ANY);
   on(lightsIdFn, "/api/*/lights/*", HTTP_ANY);
@@ -582,7 +582,7 @@ void wholeConfigFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod me
   // lights
   aJson.addItemToObject(root, "lights", getLightsJson());
   // groups
-  // TODO aJson.addItemToObject(root, "groups", getGroupsJson());
+  aJson.addItemToObject(root, "groups", getGroupsJson());
   // scenes
   aJson.addItemToObject(root, "scenes", getScenesJson());
   // configuration
@@ -655,6 +655,110 @@ void scenesIdFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod metho
 }
 
 /**
+ * Route /api/<username>/groups
+ */
+void groupsFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method) {
+  switch (method) {
+    case HTTP_GET:
+      sendJson(getGroupsJson());
+      break;
+    case HTTP_POST:
+      putGroup(-1);
+      break;
+    default:
+      sendError(4, requestUri, "Group method not supported");
+      break;
+  }
+}
+
+/**
+ * Route /api/<username>/groups/<id>
+ */
+void groupsIdFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method) {
+  String groupStringId = handler->getWildCard(1);  
+  int groupId = -1;
+  if (groupStringId.length() > 0) {
+    groupId = atoi(groupStringId.c_str());
+  }
+  switch (method) {
+    case HTTP_GET:
+      if (groupId == 0) {
+        // Group "0" is a special group that contains all lights registered in the bridge
+        aJsonObject *object = aJson.createObject();
+        aJson.addStringToObject(object, "name", "0");
+        aJsonObject *lightsArray = aJson.createArray();
+        aJson.addItemToObject(object, "lights", lightsArray);
+        char lightId[5];
+        for (int i = 1; i <= LightService.getLightsAvailable(); ++i) {
+          if (LightService.getLight(i)) {
+            sprintf(lightId, "%d", i);
+            aJson.addItemToArray(lightsArray, aJson.createItem(lightId));
+          }
+        }
+        sendJson(object);
+      } else if (LightService.getGroup(groupId)) {
+        sendJson(LightService.getGroup(groupId)->getJson());
+      } else {
+        sendError(3, "/groups/"+groupId, "Cannot retrieve group that does not exist");
+      }
+      break;
+    case HTTP_PUT:
+      putGroup(groupId);
+      sendUpdated();
+      break;
+    case HTTP_DELETE:
+      if (LightService.getGroup(groupId)) {
+        LightService.getGroup(groupId)->active = false;
+      } else {
+        sendError(3, requestUri, "Cannot delete group that does not exist");
+      }
+      break;
+    default:
+      sendError(4, requestUri, "Group method not supported");
+      break;
+  }
+}
+
+/**
+ * Route /api/<username>/groups/<id>/action
+ */
+void groupsIdActionFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method) {
+  if (method != HTTP_PUT) {
+    // error, only PUT allowed
+    sendError(4, requestUri, "Only PUT supported for groups/*/action");
+    return;
+  }
+
+  Serial.print("PUT group action ");
+  Serial.println(HTTP->arg("plain"));
+  aJsonObject* parsedRoot = aJson.parse(( char*) HTTP->arg("plain").c_str());
+
+  String groupStringId = handler->getWildCard(1);  
+  int groupId = -1;
+  if (groupStringId.length() > 0) {
+    groupId = atoi(groupStringId.c_str());
+  }
+
+  if (groupId == 0) {
+    // "0" is special group , all the lights of the bridge
+    for (int i = 1 ; i <= LightService.getLightsAvailable() ; ++i )
+      if (LightService.getLight(i))
+        if (!applyConfigToLight(LightService.getLight(i),parsedRoot))
+          return;
+    sendUpdated();
+  } else if (LightService.getGroup(groupId)) {
+    for (int i = 0 ; i <= LightService.getGroup(groupId)->getNumLights() ; ++i )
+      if (LightService.getGroup(groupId)->getLight(i))
+        if (!applyConfigToLight(LightService.getGroup(groupId)->getLight(i),parsedRoot))
+          return;
+    sendUpdated();
+  } else {
+    // error, invalid group number
+    sendError(3, requestUri, "Invalid group number");
+  }
+}
+
+/**
  * Route /api/<username>/lights
  */
 void lightsFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method) {
@@ -719,14 +823,11 @@ void lightsIdStateFn(WcFnRequestHandler *whandler, String requestUri, HTTPMethod
         sendError(2, requestUri, "Bad JSON body in request");
         return;
       }
-      HueLightInfo currentInfo = LightService.getLight(lightId)->getInfo();
-      HueLightInfo newInfo;
-      if (!parseHueLightInfo(currentInfo, parsedRoot, &newInfo)) {
+
+      if (!applyConfigToLight(LightService.getLight(lightId),parsedRoot)) {
         aJson.deleteItem(parsedRoot);
         return;
       }
-
-      LightService.getLight(lightId)->handleQuery(newInfo);
       
       sendJson(generateTargetPutResponse(parsedRoot, "/lights/" + whandler->getWildCard(1) + "/state/"));
       aJson.deleteItem(parsedRoot);
@@ -738,7 +839,6 @@ void lightsIdStateFn(WcFnRequestHandler *whandler, String requestUri, HTTPMethod
   }
   
 }
-
 
 
 // data methods / interacts with structures
@@ -755,6 +855,22 @@ LightScene *LightServiceClass::getScene() {
     if (!this->scenes_[id].active) {
       this->scenes_[id].begin(id);
       return &this->scenes_[id];      
+    }
+  return nullptr;
+}
+
+LightGroup *LightServiceClass::getGroup(int id) {
+  if (id <= MAX_GROUPS && id > 0)
+    if (this->groups_[id-1].active)
+      return &this->groups_[id-1];
+  return nullptr;
+}
+
+LightGroup *LightServiceClass::getGroup() {
+  for (int id = 0 ; id < MAX_GROUPS ; ++id)
+    if (!this->groups_[id].active) {
+      this->groups_[id].begin(id+1);
+      return &this->groups_[id];
     }
   return nullptr;
 }
@@ -785,6 +901,20 @@ String LightServiceClass::getUtc() {
 }
 
 
+bool applyConfigToLight(Light *light, HueLightInfo config) {
+  light->handleQuery(config);
+  return true;
+}
+
+bool applyConfigToLight(Light *light, aJsonObject *parsedRoot) {
+  HueLightInfo currentInfo = light->getInfo();
+  HueLightInfo newInfo;
+  if (!parseHueLightInfo(currentInfo, parsedRoot, &newInfo)) {
+    aJson.deleteItem(parsedRoot);
+    return false;
+  }
+  return applyConfigToLight(light,newInfo);
+}
 
 bool parseHueLightInfo(HueLightInfo currentInfo, aJsonObject *parsedRoot, HueLightInfo *newInfo) {
   *newInfo = currentInfo;
@@ -911,6 +1041,18 @@ aJsonObject *getLightsJson() {
   return root;
 }
 
+aJsonObject *getGroupsJson() {
+  aJsonObject *root = aJson.createObject();
+  String groupId = "";
+  for (int i = 0; i < MAX_GROUPS; ++i)
+    if(LightService.getGroup(i)) {
+      groupId = "";
+      groupId += LightService.getGroup(i)->getId();
+      aJson.addItemToObject(root, groupId.c_str(), LightService.getGroup(i)->getJson());
+    }
+  return root;
+}
+
 void putScene(int id) {
   // Save HTTP data
   String body = HTTP->arg("plain");
@@ -975,5 +1117,77 @@ void putScene(int id) {
     }
   } else {
     sendError(2, "scenes", "Bad JSON body : empty");
+  }
+}
+
+void putGroup(int id) {
+  // Save HTTP data
+  String body = HTTP->arg("plain");
+
+  Serial.print("PUT group ");
+  Serial.println(body);
+  
+  if (body != "") {
+    aJsonObject* root = aJson.parse(( char*) body.c_str());
+    if (root) {
+
+      aJsonObject* jName = aJson.getObjectItem(root, "name");
+      aJsonObject* jType = aJson.getObjectItem(root, "type");
+      aJsonObject* jClass = aJson.getObjectItem(root, "class");
+      aJsonObject* jLights = aJson.getObjectItem(root, "lights");
+
+      // if we are creating new group we need jName, jLights and jType
+      if ( (id >= 0) || (jName && jType && jLights) ) {
+
+        LightGroup *group;
+        if (id < 0) {
+          // retrieve a "new" LightGroup from pool
+          group = LightService.getGroup();
+        } else {
+          group = LightService.getGroup(id);
+        }
+
+        if (group) {
+          // update group name
+          if (jName)
+            group->setName(jName->valuestring);
+          // update group type
+          if (jType)
+            group->setType(jType->valuestring);
+          // update group class
+          if (jClass)
+            group->setClass(jClass->valuestring);
+          // update group light pointers
+          if (jLights) {
+            group->removeLights();
+            for (int i = 0; i < aJson.getArraySize(jLights); ++i) {
+              // retrieve the light id
+              aJsonObject* jLight = aJson.getArrayItem(jLights, i);
+              int lightId = atoi(jLight->valuestring);
+              // if it designs a registered light in the bridge
+              if (LightService.getLight(lightId))
+                // then add the light to the LightGroup
+                group->addLight(LightService.getLight(lightId));
+            }
+          }
+
+          String newId = "";
+          newId += group->getId();
+          sendSuccess("id", newId);
+          
+        } else {
+          sendError(301, "groups", "Groups table full");
+        }
+        
+      } else {
+        sendError(5, "groups", "Name, lights and type are required for a group");
+      }
+
+      aJson.deleteItem(root);
+    } else {
+      sendError(2, "groups", "Bad JSON body");
+    }
+  } else {
+    sendError(2, "groups", "Bad JSON body : empty");
   }
 }

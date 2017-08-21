@@ -25,11 +25,10 @@ aJsonObject *LightScene::getJson() {
   aJson.addNumberToObject(object, "version", 2);
   aJsonObject *lightsArray = aJson.createArray();
   aJson.addItemToObject(object, "lights", lightsArray);
-  String lightId;
-  for (int i = 0; i < MAX_LIGHTS; ++i) {
+  char lightId[5];
+  for (int i = 0; i < numLights; ++i) {
     if (this->lights[i]) {
-      lightId = "";
-      lightId += this->lights[i]->getId();
+      sprintf(lightId, "%d", this->lights[i]->getId());
       aJson.addItemToArray(lightsArray, aJson.createItem(lightId));
     }
   }
@@ -38,7 +37,7 @@ aJsonObject *LightScene::getJson() {
 }
 
 void LightScene::addLight(Light *light) {
-  
+  // TODO to add lightstate
 }
 
 void LightScene::setId(int id) {

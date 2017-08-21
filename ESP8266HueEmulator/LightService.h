@@ -23,13 +23,16 @@ class ESP8266WebServer;
 class WcFnRequestHandler;
 
 bool parseHueLightInfo(HueLightInfo currentInfo, aJsonObject *parsedRoot, HueLightInfo *newInfo);
+bool applyConfigToLight(Light *light, HueLightInfo config);
+bool applyConfigToLight(Light *light, aJsonObject *parsedRoot);
 
-aJsonObject *getGroupsJson();//TODO
+aJsonObject *getGroupsJson();
 aJsonObject *getScenesJson();
 aJsonObject *getLightsJson();
 void addConfigJson(aJsonObject *config);
 
 void putScene(int id);
+void putGroup(int id);
 
 
 // Fn Methods
@@ -50,8 +53,7 @@ void configFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method)
 */
 void authFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method);
 /**
-* Respond with complete json as in https://github.com/probonopd/ESP8266HueEmulator/wiki/Hue-API#get-all-information-about-the-bridge 
-* TODO
+* Respond with complete json as in https://github.com/probonopd/ESP8266HueEmulator/wiki/Hue-API#get-all-information-about-the-bridge
 */
 void wholeConfigFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method);
 /**
@@ -64,22 +66,18 @@ void scenesFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method)
 void scenesIdFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method);
 /**
 * PUT a scene description for one light = lightstate
-* TODO
 */
 void scenesIdLightFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method);
 /**
 * GET or POST group
-* TODO
 */
 void groupsFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method);
 /**
 * GET, PUT or DELETE a group
-* TODO
 */
 void groupsIdFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method);
 /**
-* PUT description for an action of a group
-* TODO
+* Execute an action of a group
 */
 void groupsIdActionFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method);
 /**
@@ -125,7 +123,7 @@ class LightServiceClass {
     private:
       int currentNumLights;
       Light *lights_[MAX_LIGHTS] = {nullptr, };
-      LightGroup *groups_[MAX_GROUPS] = {nullptr, };
+      LightGroup groups_[MAX_GROUPS];
       LightScene scenes_[MAX_SCENES];
 };
 
