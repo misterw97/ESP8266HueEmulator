@@ -18,23 +18,98 @@
 #define LIGHTSERVICE
 
 class aJsonObject;
-bool parseHueLightInfo(HueLightInfo currentInfo, aJsonObject *parsedRoot, HueLightInfo *newInfo);
-
 class Light;
 class ESP8266WebServer;
 class WcFnRequestHandler;
+
+bool parseHueLightInfo(HueLightInfo currentInfo, aJsonObject *parsedRoot, HueLightInfo *newInfo);
+
+aJsonObject *getGroupsJson();//TODO
+aJsonObject *getScenesJson();
+aJsonObject *getLightsJson();
+void addConfigJson(aJsonObject *config);
+
+void putScene(int id);
+
+
+// Fn Methods
+/**
+ * Send XML description of the Bridge
+ */
+void descriptionFn();
+/**
+* Empty response, for things that are not available
+*/
+void unimpFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method);
+/**
+* Send short description of the bridge
+*/
+void configFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method);
+/**
+* Confirm success of authentification (simulates a recent press on the button on the bridge)
+*/
+void authFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method);
+/**
+* Respond with complete json as in https://github.com/probonopd/ESP8266HueEmulator/wiki/Hue-API#get-all-information-about-the-bridge 
+* TODO
+*/
+void wholeConfigFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method);
+/**
+* List or create scenes
+*/
+void scenesFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method);
+/**
+* GET, PUT or DELETE a scene
+*/
+void scenesIdFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method);
+/**
+* PUT a scene description for one light = lightstate
+* TODO
+*/
+void scenesIdLightFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method);
+/**
+* GET or POST group
+* TODO
+*/
+void groupsFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method);
+/**
+* GET, PUT or DELETE a group
+* TODO
+*/
+void groupsIdFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method);
+/**
+* PUT description for an action of a group
+* TODO
+*/
+void groupsIdActionFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method);
+/**
+* GET existing lights
+* POST for asking the bridge to search for new lights
+*/
+void lightsFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method);
+/**
+* GET information on one light
+* PUT information on a light ( TODO )
+*/
+void lightsIdFn(WcFnRequestHandler *whandler, String requestUri, HTTPMethod method);
+/**
+* PUT information on light state
+*/
+void lightsIdStateFn(WcFnRequestHandler *whandler, String requestUri, HTTPMethod method);
+
 class LightServiceClass {
     public:
 
-      /**
-       * @return number of available lights
-       */
       int getLightsAvailable();
-      /**
-       * @param *light pointer for the light to add to the bridge
-       * @return true if the light has been added to the bridge
-       */
+
+      Light *getLight(int id);
+      LightGroup *getGroup(int id);
+      LightScene *getScene(int id);
+
+      LightGroup *getGroup();
+      LightScene *getScene();
       bool addLight(Light *light);
+      
       /**
        * Start the server and listen 
        */
@@ -44,73 +119,14 @@ class LightServiceClass {
        * Update state of things...
        */
       void update();
+      
+      String getUtc();
 
-      /**
-       * Send XML description of the Bridge
-       */
-      void descriptionFn();
-      void unimpFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method);
-      /**
-       * Send short description of the bridge
-       */
-      void configFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method);
-      /**
-       * Confirm success of authentification (simulates a recent press on the button on the bridge)
-       */
-      void authFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method);
-      /**
-       * Respond with complete json as in https://github.com/probonopd/ESP8266HueEmulator/wiki/Hue-API#get-all-information-about-the-bridge 
-       */
-      void wholeConfigFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method);
-      /**
-       * List or create scenes
-       */
-      void scenesFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method);
-      /**
-       * GET, PUT or DELETE a scene
-       */
-      void scenesIdFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method);
-      /**
-       * PUT a scene description for one light
-       */
-      void scenesIdLightFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method);
-      /**
-       * GET or POST group
-       */
-      void groupsFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method);
-      /**
-       * GET, PUT or DELETE a group
-       */
-      void groupsIdFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method);
-      /**
-       * PUT description for an action of a group
-       */
-      void groupsIdActionFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method);
-      /**
-       * GET existing lights
-       * POST for asking the bridge to search for new lights
-       */
-      void lightsFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method);
-      /**
-       * GET information on one light
-       * PUT information on a light
-       */
-      void lightsIdFn(WcFnRequestHandler *whandler, String requestUri, HTTPMethod method);
-      /**
-       * POST information on a light
-       */
-      void lightsIdStateFn(WcFnRequestHandler *whandler, String requestUri, HTTPMethod method);
-      /**
-       * Creates a new light
-       */
-      void lightsNewFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method);
-      
-      
     private:
       int currentNumLights;
       Light *lights_[MAX_LIGHTS] = {nullptr, };
       LightGroup *groups_[MAX_GROUPS] = {nullptr, };
-      LightScene *scenes_[MAX_SCENES] = {nullptr, };
+      LightScene scenes_[MAX_SCENES];
 };
 
 extern LightServiceClass LightService;

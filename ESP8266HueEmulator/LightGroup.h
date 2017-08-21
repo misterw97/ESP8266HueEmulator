@@ -1,6 +1,5 @@
 #include "params.h"
 #include "Light.h"
-
 #include <aJSON.h>
 
 /**
@@ -14,19 +13,26 @@ class aJsonObject;
 
 class LightGroup {
   public:
-    LightGroup(aJsonObject *root);
-
-    /**
-     * @return Json representation of the group
-     */
+    void begin(int id);
+    bool active = false;
+      
     aJsonObject *getJson();
-    aJsonObject *getSceneJson();
 
-    unsigned int lights[MAX_LIGHTS];
+    void setId(int id);
+    int getId();
+    void addLight(Light *light);
+    void removeLights();
+    void setName(char* name);
+    void setOwner(const char* owner);
     
   private:
-    char* name;
-    Light *lights_[MAX_LIGHTS];     
+    int id;
+    char name[40];
+    char owner[40];
+    int numLights;
+    Light *lights[MAX_LIGHTS];
+    
+    
 };
 
 #endif

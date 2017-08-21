@@ -1,16 +1,13 @@
 /**
  * Emulate Philips Hue Bridge
  **/
-#include <ESP8266WiFi.h>
-#include <ESP8266mDNS.h>
-#include <WiFiUdp.h>
-
 #include "Light.h"
 #include "LightService.h"
 
 #include "SSDP.h"
 
 #include <aJSON.h> // Replace avm/pgmspace.h with pgmspace.h there and set #define PRINT_BUFFER_LEN 4096 ################# IMPORTANT
+
 
 // Include ssid and password
 #include "secrets.h"
@@ -39,6 +36,7 @@ class SerialLight : public Light {
 SerialLight myLight("Test myLight",DIMMABLE_LIGHT);
 
 void setup() {
+  Serial.begin(9600);
   
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
@@ -48,12 +46,14 @@ void setup() {
     Serial.print(".");
   }
   
-  //LightService.begin();
-  
+  LightService.begin();
+  LightService.addLight(&myLight);
 }
 
 void loop() {
   
-  //LightService.update();
+  LightService.update();
+
+  yield();
   
 }
