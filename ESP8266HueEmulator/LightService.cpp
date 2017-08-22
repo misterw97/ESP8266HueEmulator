@@ -452,8 +452,8 @@ void LightServiceClass::begin(ESP8266WebServer *svr) {
   on(unimpFn, "/api/*/sensors", HTTP_GET);
   on(scenesFn, "/api/*/scenes", HTTP_ANY);
   on(scenesIdFn, "/api/*/scenes/*", HTTP_ANY);
-  //on(scenesIdLightFn, "/api/*/scenes/*/lightstates/*", HTTP_ANY);
-  //on(scenesIdLightFn, "/api/*/scenes/*/lights/*/state", HTTP_ANY);
+  on(scenesIdLightFn, "/api/*/scenes/*/lightstates/*", HTTP_ANY);
+  on(scenesIdLightFn, "/api/*/scenes/*/lights/*/state", HTTP_ANY);
   on(groupsFn, "/api/*/groups", HTTP_ANY);
   on(groupsIdFn, "/api/*/groups/*", HTTP_ANY);
   on(groupsIdActionFn, "/api/*/groups/*/action", HTTP_ANY);
@@ -631,7 +631,7 @@ void scenesIdFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod metho
   switch (method) {
     case HTTP_GET:
       if (LightService.getScene(sceneId)) {
-        sendJson(LightService.getScene(sceneId)->getJson());
+        sendJson(LightService.getScene(sceneId)->getJson(true));
       } else {
         sendError(3, "/scenes/"+sceneId, "Cannot retrieve scene that does not exist");
       }
@@ -643,11 +643,58 @@ void scenesIdFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod metho
     case HTTP_DELETE:
       if (LightService.getScene(sceneId)) {
         LightService.getScene(sceneId)->active = false;
+        sendSuccess(requestUri+" deleted");
       } else {
         sendError(3, requestUri, "Cannot delete scene that does not exist");
       }
-      sendSuccess(requestUri+" deleted");
       break;
+    default:
+      sendError(4, requestUri, "Scene method not supported");
+      break;
+  }
+}
+
+/**
+ * Route /api/<username>/scenes/<id>/lightstates/<id>
+ */
+void scenesIdLightFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method) {
+  switch (method) {
+    case HTTP_PUT: {
+      Serial.print("PUT scene lightstate ");
+      Serial.println(HTTP->arg("plain"));
+
+      String sceneStringId = handler->getWildCard(1);
+      int sceneId = -1;
+      if (sceneStringId.length() > 0) {
+        sceneId = atoi(sceneStringId.c_str());
+      }
+      String lightStringId = handler->getWildCard(2);
+      int lightId = -1;
+      if (lightStringId.length() > 0) {
+        lightId = atoi(lightStringId.c_str());
+      }
+
+      if ( LightService.getLight(lightId) && LightService.getScene(sceneId) ) {
+
+        aJsonObject* parsedRoot = aJson.parse(( char*) HTTP->arg("plain").c_str());
+      
+        HueLightInfo currentInfo;
+        HueLightInfo newInfo;
+        if (!parseHueLightInfo(currentInfo, parsedRoot, &newInfo)) {
+          aJson.deleteItem(parsedRoot);
+          return;
+        }
+
+        LightService.getScene(sceneId)->addInfo(lightId,newInfo);
+        
+        sendJson(generateTargetPutResponse(parsedRoot, "/scenes/" + handler->getWildCard(1) + "/lightstates/" + handler->getWildCard(2) + "/"));
+        aJson.deleteItem(parsedRoot);
+        
+      } else {
+        sendError(3, "/scenes/", "Cannot retrieve scene and/or light that does not exist");
+      }
+      break;
+    }
     default:
       sendError(4, requestUri, "Scene method not supported");
       break;
@@ -709,6 +756,7 @@ void groupsIdFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod metho
     case HTTP_DELETE:
       if (LightService.getGroup(groupId)) {
         LightService.getGroup(groupId)->active = false;
+        sendSuccess(requestUri+" deleted");
       } else {
         sendError(3, requestUri, "Cannot delete group that does not exist");
       }
@@ -733,12 +781,30 @@ void groupsIdActionFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod
   Serial.println(HTTP->arg("plain"));
   aJsonObject* parsedRoot = aJson.parse(( char*) HTTP->arg("plain").c_str());
 
+  aJsonObject* jScene = aJson.getObjectItem(parsedRoot, "scene");
+  if (jScene) {
+    // activation of a scene instead of a group (TODO : normally it should only activate lights that are also part of the group retrieved...)
+    String sceneStringId = jScene->valuestring;  
+    int sceneId = -1;
+    if (sceneStringId.length() > 0) {
+      sceneId = atoi(sceneStringId.c_str());
+    }
+    LightScene *scene = LightService.getScene(sceneId);
+    if (scene) {
+      for (int i = 0 ; i < scene->getNumLights() ; ++i)
+        if (!applyConfigToLight(scene->getLight(i),scene->getInfo(i)))
+          return;
+      sendUpdated();
+    }
+    return;
+  }
+
   String groupStringId = handler->getWildCard(1);  
   int groupId = -1;
   if (groupStringId.length() > 0) {
     groupId = atoi(groupStringId.c_str());
   }
-
+  
   if (groupId == 0) {
     // "0" is special group , all the lights of the bridge
     for (int i = 1 ; i <= LightService.getLightsAvailable() ; ++i )
@@ -839,6 +905,7 @@ void lightsIdStateFn(WcFnRequestHandler *whandler, String requestUri, HTTPMethod
   }
   
 }
+
 
 
 // data methods / interacts with structures
@@ -1104,7 +1171,9 @@ void putScene(int id) {
           
         }
         else {
-          sendError(301, "scenes", "Scenes table full");
+          //DEBUG
+          sendSuccess("id", "0");
+          //sendError(301, "scenes", "Scenes table full");
         }
         
       } else {

@@ -77,7 +77,7 @@ void groupsFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method)
 */
 void groupsIdFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method);
 /**
-* Execute an action of a group
+* Execute an action of a group or a scene (TODO : https://developers.meethue.com/documentation/groups-api#253_body_example)
 */
 void groupsIdActionFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method);
 /**

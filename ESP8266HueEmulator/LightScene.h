@@ -1,6 +1,7 @@
 #include <aJSON.h>
 #include "Light.h"
 #include "params.h"
+#include "HueLightInfo.h"
 
 /**
  * A scene is a list of saved HueLightInfo for each Light
@@ -15,14 +16,19 @@ class LightScene {
     bool active = false;
     
     aJsonObject *getJson();
+    aJsonObject *getJson(bool full);
+
+    void addLight(Light *light);
+    bool addInfo(int lightId, HueLightInfo info);
     
     void setId(int id);
-    void addLight(Light *light);
     void setName(char* name);
     void setOwner(const char* owner);
     
     int getId();
-    Light* *getLights();
+    Light *getLight(int index);
+    int getNumLights();
+    HueLightInfo getInfo(int index);
     
     void removeLights();
   private:
@@ -31,7 +37,7 @@ class LightScene {
     char owner[40];
     int numLights;
     Light *lights[MAX_LIGHTS];
-    
+    HueLightInfo infos[MAX_LIGHTS];
     
 };
 

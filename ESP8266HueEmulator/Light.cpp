@@ -16,24 +16,7 @@ aJsonObject *Light::getJson() {
 }
 
 aJsonObject *Light::getStateJson() {
-  aJsonObject *object = aJson.createObject();
-  aJson.addBooleanToObject(object, "on", this->info.on);
-  aJson.addNumberToObject(object, "bri", this->info.brightness);
-  aJson.addNumberToObject(object, "hue", this->info.hue);
-  aJson.addNumberToObject(object, "sat", this->info.saturation);
-  aJsonObject *xyArray = aJson.createArray();
-  // TODO actually store this (xy mode: CIE 1931 color co-ordinates)
-  double numbers[2] = {0.0, 0.0};
-  aJson.addItemToObject(object, "xy", aJson.createFloatArray(numbers, 2));
-  // TODO actually store this (ct mode: color temp (expressed in mireds range 154-500))
-  aJson.addNumberToObject(object, "ct", 500);
-  aJson.addStringToObject(object, "alert", this->info.alert == ALERT_SELECT ? "select" : ( this->info.alert == ALERT_LSELECT ? "lselect" : "none" ));
-  aJson.addStringToObject(object, "effect", this->info.effect == EFFECT_COLORLOOP ? "colorloop" : "none");
-  // TODO the current color mode 
-  aJson.addStringToObject(object, "colormode", "hs");
-  // lamp can be seen by the hub
-  aJson.addBooleanToObject(object, "reachable", true);
-  return object;  
+  return this->info.getJson();
 }
 
 Light::Light(char* n, LightType t) {

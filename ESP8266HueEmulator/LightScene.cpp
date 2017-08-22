@@ -15,14 +15,14 @@ void LightScene::removeLights() {
 }
 
 aJsonObject *LightScene::getJson() {
+  return this->getJson(true);
+}
+aJsonObject *LightScene::getJson(bool full) {
   aJsonObject *object = aJson.createObject();
   aJson.addStringToObject(object, "name", this->name);
   aJson.addStringToObject(object, "owner", this->owner);
-  aJson.addStringToObject(object, "picture", "");
-  aJson.addStringToObject(object, "lastupdated", "");
   aJson.addBooleanToObject(object, "recycle", false);
-  aJson.addBooleanToObject(object, "locked", false);
-  aJson.addNumberToObject(object, "version", 2);
+  aJson.addBooleanToObject(object, "locked", false); 
   aJsonObject *lightsArray = aJson.createArray();
   aJson.addItemToObject(object, "lights", lightsArray);
   char lightId[5];
@@ -32,12 +32,54 @@ aJsonObject *LightScene::getJson() {
       aJson.addItemToArray(lightsArray, aJson.createItem(lightId));
     }
   }
-  // TODO add lightstates
+  if (full) {
+    // lightstates
+    aJsonObject *lightstates = aJson.createObject();
+    aJson.addItemToObject(object, "lightstates", lightstates);
+    for (int i = 0; i < numLights; ++i) {
+      sprintf(lightId, "%d", this->lights[i]->getId());
+      aJson.addItemToObject(lightstates, lightId, this->infos[i].getJson());
+    }
+    aJson.addStringToObject(object, "picture", "");
+    aJson.addNumberToObject(object, "version", 2);
+    aJson.addStringToObject(object, "lastupdated", "");
+  } else {
+    aJson.addNumberToObject(object, "version", 1);
+  }
   return object;
 }
 
 void LightScene::addLight(Light *light) {
-  // TODO to add lightstate
+  if (numLights < MAX_LIGHTS)
+    this->lights[numLights++] = light;
+}
+
+bool LightScene::addInfo(int lightId, HueLightInfo info) {
+  for (int i = 0 ; i < numLights ; ++i) {
+    if (this->lights[i]->getId() == lightId) {
+      this->infos[i] = info;
+      return true;
+    }
+  }
+  return false;
+}
+
+HueLightInfo LightScene::getInfo(int index) {
+  if (index >= 0 && index < numLights) {
+    return this->infos[index];
+  }
+  HueLightInfo def;
+  return def;
+}
+
+Light *LightScene::getLight(int index) {
+  if (index >= 0 && index < numLights)
+    return this->lights[index];
+  return nullptr;
+}
+
+int LightScene::getNumLights() {
+  return this->numLights;
 }
 
 void LightScene::setId(int id) {
