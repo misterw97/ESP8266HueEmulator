@@ -2,6 +2,7 @@
  * Emulate Philips Hue Bridge
  **/
 #include "Light.h"
+#include "LightGroup.h"
 #include "LightService.h"
 
 #include "SSDP.h"
@@ -50,6 +51,11 @@ void setup() {
   
   LightService.begin();
   LightService.addLight(&myLight);
+  LightGroup *group = LightService.getGroup();
+  group->setName("Groupe init");
+  group->setType(ROOM);
+  group->setClass(OFFICE);
+  group->addLight(&myLight);
 }
 
 void loop() {
