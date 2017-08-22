@@ -18,12 +18,18 @@ enum HueEffect {
   EFFECT_NONE, EFFECT_COLORLOOP
 };
 
+enum LightType {
+  EXTENDED_COLOR_LIGHT,
+  DIMMABLE_LIGHT,
+  COLOR_LIGHT
+};
+
 class HueLightInfo {
   public:
-    aJsonObject *getJson();
+    aJsonObject *getJson(LightType type);
   
     bool on = false;
-    int brightness = 0;
+    int brightness = 254;
     HueColorType type = TYPE_HUE_SAT;
     int hue = 0, saturation = 0;
     HueAlert alert = ALERT_NONE;

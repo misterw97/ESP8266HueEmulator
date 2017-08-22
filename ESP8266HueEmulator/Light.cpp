@@ -16,7 +16,7 @@ aJsonObject *Light::getJson() {
 }
 
 aJsonObject *Light::getStateJson() {
-  return this->info.getJson();
+  return this->info.getJson(this->type);
 }
 
 Light::Light(char* n, LightType t) {
@@ -38,6 +38,10 @@ int Light::getId() {
 
 HueLightInfo Light::getInfo() {
   return this->info;
+}
+
+LightType Light::getType() {
+  return this->type;
 }
 
 char* Light::getTypeName() {

@@ -9,11 +9,7 @@
 #define LIGHT
 
 // https://developers.meethue.com/documentation/supported-lights
-enum LightType {
-  EXTENDED_COLOR_LIGHT,
-  DIMMABLE_LIGHT,
-  COLOR_LIGHT
-};
+
 
 class Light {
   
@@ -22,7 +18,8 @@ class Light {
     
     void setId(int id);
     int getId();
-    
+
+    LightType getType();
     char* getTypeName();
     char* getTypeModelid();
     char* getName();
@@ -44,6 +41,7 @@ class Light {
     int id;
     char name[25];
     LightType type;
+  protected:
     HueLightInfo info;
 };
 

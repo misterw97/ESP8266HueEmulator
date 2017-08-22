@@ -590,14 +590,14 @@ void wholeConfigFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod me
   aJson.addItemToObject(root, "config", config = aJson.createObject());
   addConfigJson(config);
   // TODO add support for schedules
-  aJsonObject *schedules;
-  aJson.addItemToObject(root, "schedules", schedules = aJson.createObject());
+  //aJsonObject *schedules;
+  //aJson.addItemToObject(root, "schedules", schedules = aJson.createObject());
   // TODO add support for sensors
-  aJsonObject *sensors;
-  aJson.addItemToObject(root, "sensors", sensors = aJson.createObject());
+  //aJsonObject *sensors;
+  //aJson.addItemToObject(root, "sensors", sensors = aJson.createObject());
   // TODO add support for rules
-  aJsonObject *rules;
-  aJson.addItemToObject(root, "rules", rules = aJson.createObject());
+  //aJsonObject *rules;
+  //aJson.addItemToObject(root, "rules", rules = aJson.createObject());
   sendJson(root);
 }
 
@@ -631,7 +631,7 @@ void scenesIdFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod metho
   switch (method) {
     case HTTP_GET:
       if (LightService.getScene(sceneId)) {
-        sendJson(LightService.getScene(sceneId)->getJson(true));
+        sendJson(LightService.getScene(sceneId)->getJson());
       } else {
         sendError(3, "/scenes/"+sceneId, "Cannot retrieve scene that does not exist");
       }
@@ -1171,8 +1171,9 @@ void putScene(int id) {
           
         }
         else {
-          //DEBUG
+          // DEBUG
           sendSuccess("id", "0");
+          // TODO : Optimize memory allocation , see https://github.com/misterw97/ESP8266HueEmulator/issues/1
           //sendError(301, "scenes", "Scenes table full");
         }
         

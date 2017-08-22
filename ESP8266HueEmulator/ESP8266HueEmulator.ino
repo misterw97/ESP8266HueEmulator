@@ -28,6 +28,8 @@ class SerialLight : public Light {
     }
     
     void handleQuery(HueLightInfo info) {
+      // NEEDED !
+      this->info = info;
       turn(info.on);
     }
     

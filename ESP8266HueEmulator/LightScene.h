@@ -16,7 +16,6 @@ class LightScene {
     bool active = false;
     
     aJsonObject *getJson();
-    aJsonObject *getJson(bool full);
 
     void addLight(Light *light);
     bool addInfo(int lightId, HueLightInfo info);
