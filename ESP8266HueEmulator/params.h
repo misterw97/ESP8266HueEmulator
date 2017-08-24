@@ -6,6 +6,6 @@
 #define MAX_SCENES 3
 #define MAX_GROUPS 2
 #define COLOR_SATURATION 255.0f
-#define BRIDGE_NAME "Reveil"
+#define BRIDGE_NAME "Hue Bridge Emulator"
 
 #endif

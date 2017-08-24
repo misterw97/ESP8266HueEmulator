@@ -579,8 +579,6 @@ void authFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method) {
 void wholeConfigFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod method) {
   aJsonObject *root;
   root = aJson.createObject();
-  // lights
-  aJson.addItemToObject(root, "lights", getLightsJson());
   // groups
   aJson.addItemToObject(root, "groups", getGroupsJson());
   // scenes
@@ -589,15 +587,17 @@ void wholeConfigFn(WcFnRequestHandler *handler, String requestUri, HTTPMethod me
   aJsonObject *config;
   aJson.addItemToObject(root, "config", config = aJson.createObject());
   addConfigJson(config);
+  // lights
+  aJson.addItemToObject(root, "lights", getLightsJson());
   // TODO add support for schedules
-  //aJsonObject *schedules;
-  //aJson.addItemToObject(root, "schedules", schedules = aJson.createObject());
+  aJsonObject *schedules;
+  aJson.addItemToObject(root, "schedules", schedules = aJson.createObject());
   // TODO add support for sensors
-  //aJsonObject *sensors;
-  //aJson.addItemToObject(root, "sensors", sensors = aJson.createObject());
+  aJsonObject *sensors;
+  aJson.addItemToObject(root, "sensors", sensors = aJson.createObject());
   // TODO add support for rules
-  //aJsonObject *rules;
-  //aJson.addItemToObject(root, "rules", rules = aJson.createObject());
+  aJsonObject *rules;
+  aJson.addItemToObject(root, "rules", rules = aJson.createObject());
   sendJson(root);
 }
 
